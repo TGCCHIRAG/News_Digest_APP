@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { NhostClient } from '@nhost/react';
 import { GraphQLClient, gql } from 'graphql-request';
 import { format } from 'date-fns';
-import { Bookmark, Share2, Heart, Loader2, Search } from 'lucide-react';
+import { Bookmark, Share2, Heart, Loader2, Search, Check } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { motion } from 'framer-motion';
 
@@ -51,7 +51,8 @@ export default function Dashboard() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [savedArticles, setSavedArticles] = useState<string[]>([]);
   const [likedArticles, setLikedArticles] = useState<string[]>([]);
-  const [filter, setFilter] = useState<'all' | 'positive' | 'neutral' | 'negative' | 'saved'>('all');
+  const [readArticles, setReadArticles] = useState<string[]>([]);
+  const [filter, setFilter] = useState<'all' | 'positive' | 'neutral' | 'negative' | 'saved' | 'read'>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -80,11 +81,14 @@ export default function Dashboard() {
     fetchArticles();
   }, []);
 
-  // Filter articles based on sentiment, saved status, or search query
+  // Filter articles based on sentiment, saved status, read status, or search query
   const filteredArticles = articles
     .filter((article) => {
       if (filter === 'saved') {
         return savedArticles.includes(article.id);
+      }
+      if (filter === 'read') {
+        return readArticles.includes(article.id);
       }
       return filter === 'all' ? true : article.sentiment === filter;
     })
@@ -127,6 +131,17 @@ export default function Dashboard() {
     }
   };
 
+  // Handle marking an article as read/unread
+  const handleMarkAsRead = (articleId: string) => {
+    if (readArticles.includes(articleId)) {
+      setReadArticles((prev) => prev.filter((id) => id !== articleId));
+      toast.success('Article marked as unread');
+    } else {
+      setReadArticles((prev) => [...prev, articleId]);
+      toast.success('Article marked as read');
+    }
+  };
+
   // Handle sharing an article
   const handleShareArticle = (url: string) => {
     navigator.clipboard.writeText(url);
@@ -159,7 +174,7 @@ export default function Dashboard() {
 
         {/* Filters */}
         <div className="mt-4 flex gap-2">
-          {(['all', 'positive', 'neutral', 'negative', 'saved'] as const).map((option) => (
+          {(['all', 'positive', 'neutral', 'negative', 'saved', 'read'] as const).map((option) => (
             <button
               key={option}
               onClick={() => setFilter(option)}
@@ -188,7 +203,9 @@ export default function Dashboard() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
-              className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
+              className={`bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow ${
+                readArticles.includes(article.id) ? 'border-2 border-green-500' : ''
+              }`}
             >
               {article.image_url && (
                 <img
@@ -246,6 +263,16 @@ export default function Dashboard() {
                       className="text-gray-500 hover:text-blue-600"
                     >
                       <Share2 className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => handleMarkAsRead(article.id)}
+                      className={`${
+                        readArticles.includes(article.id)
+                          ? 'text-green-600'
+                          : 'text-gray-500 hover:text-green-600'
+                      }`}
+                    >
+                      <Check className="w-5 h-5" />
                     </button>
                   </div>
                   <a

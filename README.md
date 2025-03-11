@@ -34,8 +34,8 @@ Bolt.new does not support Nhost's environment variables natively. To work around
 ### Installation
 1. Clone the repository:
    ```sh
-   git clone https:https://github.com/TGCCHIRAG/News_Digest_APP.git
-   cd News_Digest_APP
+   git clone https://github.com/your-repo/news-digest.git
+   cd news-digest
    ```
 2. Install dependencies:
    ```sh

@@ -129,7 +129,10 @@ export default function Dashboard() {
         setLoading(true);
         setError(null);
         const data = await graphqlClient.request<{ articles: Article[] }>(GET_ARTICLES);
-        setArticles(data.articles);
+
+        // Remove duplicate articles based on title
+        const uniqueArticles = removeDuplicateArticles(data.articles);
+        setArticles(uniqueArticles);
       } catch (err) {
         console.error('Error fetching articles:', err);
         setError('Failed to fetch articles. Please try again later.');
@@ -140,6 +143,18 @@ export default function Dashboard() {
 
     fetchArticles();
   }, []);
+
+  // Function to remove duplicate articles based on title
+  const removeDuplicateArticles = (articles: Article[]): Article[] => {
+    const uniqueTitles = new Set<string>();
+    return articles.filter((article) => {
+      if (uniqueTitles.has(article.title)) {
+        return false; // Skip duplicate
+      }
+      uniqueTitles.add(article.title);
+      return true; // Keep unique article
+    });
+  };
 
   // Extract unique news types for the preference filter
   const uniqueTypes = Array.from(new Set(articles.map((article) => article.type)));

@@ -86,10 +86,10 @@ export default function Dashboard() {
   // Handle saving/unsaving an article
   const handleSaveArticle = (articleId: string) => {
     if (savedArticles.includes(articleId)) {
-      setSavedArticles((prev) => prev.filter((id) => id !== articleId));
+      setSavedArticles((prev) => prev.filter((id) => id !== articleId)); // Remove article ID
       toast.success('Article removed from saved');
     } else {
-      setSavedArticles((prev) => [...prev, articleId]);
+      setSavedArticles((prev) => [...prev, articleId]); // Add article ID
       toast.success('Article saved');
     }
   };
@@ -129,10 +129,16 @@ export default function Dashboard() {
         setLoading(true);
         setError(null);
         const data = await graphqlClient.request<{ articles: Article[] }>(GET_ARTICLES);
-
+  
         // Remove duplicate articles based on title
         const uniqueArticles = removeDuplicateArticles(data.articles);
-        setArticles(uniqueArticles);
+  
+        // Sort articles by created_at date (newest first)
+        const sortedArticles = uniqueArticles.sort((a, b) => {
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        });
+  
+        setArticles(sortedArticles);
       } catch (err) {
         console.error('Error fetching articles:', err);
         setError('Failed to fetch articles. Please try again later.');
@@ -140,7 +146,7 @@ export default function Dashboard() {
         setLoading(false);
       }
     };
-
+  
     fetchArticles();
   }, []);
 
@@ -268,53 +274,62 @@ export default function Dashboard() {
                 <p className="text-sm text-gray-500 mb-4">{article.sentiment_explanation}</p>
 
                 <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                  <div className="flex gap-4">
-                    {/* Save Article Button */}
-                    <motion.button
-                      onClick={() => handleSaveArticle(article.id)}
-                      whileTap={{ scale: 0.9 }}
-                      className={`text-gray-500 hover:text-blue-600 ${
-                        savedArticles.includes(article.id) ? 'text-blue-600' : ''
-                      }`}
-                    >
-                      <Bookmark className="w-5 h-5" />
-                    </motion.button>
+  <div className="flex gap-4">
+    {/* Save Article Button */}
+        <motion.button
+      onClick={() => handleSaveArticle(article.id)}
+      whileHover={bounceVariant.animate}
+      whileTap={{ scale: 0.9 }}
+      className={`text-gray-500 hover:text-blue-600 transition-colors ${
+        savedArticles.includes(article.id) ? '!text-blue-600' : ''
+      }`}
+    >
+      <Bookmark className="w-5 h-5" />
+    </motion.button>
 
-                    {/* Like Article Button */}
-                    <motion.button
-                      onClick={() => handleLikeArticle(article.id)}
-                      whileTap={{ scale: 0.9 }}
-                      className={`text-gray-500 hover:text-red-600 ${
-                        likedArticles.includes(article.id) ? 'text-red-600' : ''
-                      }`}
-                    >
-                      <Heart className="w-5 h-5" />
-                    </motion.button>
+    {/* Like Article Button */}
+    <motion.button
+      onClick={() => handleLikeArticle(article.id)}
+      whileHover={bounceVariant.animate}
+      whileTap={{ scale: 0.9 }}
+      className={`text-gray-500 hover:text-red-600 ${
+        likedArticles.includes(article.id) ? 'text-red-600' : ''
+      }`}
+    >
+      <Heart className="w-5 h-5" />
+    </motion.button>
 
-                    {/* Share Article Button */}
-                    <motion.button
-                      onClick={() => handleShareArticle(article.url)}
-                      whileTap={{ scale: 0.9 }}
-                      className="text-gray-500 hover:text-blue-600"
-                    >
-                      <Share2 className="w-5 h-5" />
-                    </motion.button>
+    {/* Share Article Button */}
+    <motion.button
+      onClick={() => handleShareArticle(article.url)}
+      whileHover={bounceVariant.animate}
+      whileTap={{ scale: 0.9 }}
+      className="text-gray-500 hover:text-blue-600"
+    >
+      <Share2 className="w-5 h-5" />
+    </motion.button>
 
-                    {/* Mark as Read Button */}
-                    <motion.button
-                      onClick={() => handleMarkAsRead(article.id)}
-                      whileTap={{ scale: 0.9 }}
-                      className={`text-gray-500 hover:text-green-600 ${
-                        readArticles.includes(article.id) ? 'text-green-600' : ''
-                      }`}
-                    >
-                      <Check className="w-5 h-5" />
-                    </motion.button>
-                  </div>
-                  <a href={article.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700 font-medium">
-                    Read More →
-                  </a>
-                </div>
+    {/* Mark as Read Button */}
+    <motion.button
+      onClick={() => handleMarkAsRead(article.id)}
+      whileHover={bounceVariant.animate}
+      whileTap={{ scale: 0.9 }}
+      className={`text-gray-500 hover:text-green-600 ${
+        readArticles.includes(article.id) ? 'text-green-600' : ''
+      }`}
+    >
+      <Check className="w-5 h-5" />
+    </motion.button>
+  </div>
+  <a
+    href={article.url}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="text-blue-600 hover:text-blue-700 font-medium"
+  >
+    Read More →
+  </a>
+</div>
               </div>
             </motion.article>
           ))}

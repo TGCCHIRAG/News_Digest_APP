@@ -1,18 +1,18 @@
 import React from 'react';
-import axios from 'axios'; // Import Axios
+import axios from 'axios';
+import { setAuthToken } from '../api';
 import {
   useSignInEmailPassword,
   useSignUpEmailPassword,
-  useSignOut, // Add useSignOut hook
+  useSignOut,
   useAccessToken,
   useAuthenticationStatus,
 } from '@nhost/react';
 import { Newspaper, Eye, EyeOff } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
-// Create an Axios instance
 const api = axios.create({
-  baseURL: 'http://localhost:3000', // Set your API base URL
+  baseURL: 'http://localhost:3000',
 });
 
 export default function Login() {
@@ -28,10 +28,10 @@ export default function Login() {
     isLoading: isSignUpLoading,
     isError: isSignUpError,
     error: signUpError,
-    needsEmailVerification, // Flag to check if email verification is needed
+    needsEmailVerification,
   } = useSignUpEmailPassword();
 
-  const { signOut } = useSignOut(); // Add signOut function
+  const { signOut } = useSignOut();
   const accessToken = useAccessToken();
   const { isAuthenticated } = useAuthenticationStatus();
 
@@ -41,25 +41,21 @@ export default function Login() {
   const [isSignUp, setIsSignUp] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
+  // Function to set the access token in headers
+  const setAuthHeader = (token: string | null) => {
+    if (token) {
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      console.log('JWT Token set in headers:', token);
+    } else {
+      delete api.defaults.headers.common['Authorization'];
+      console.log('JWT Token removed from headers');
+    }
+  };
+
   // Effect to set the access token in headers when it changes
   React.useEffect(() => {
-    if (accessToken) {
-      console.log('JWT Token:', accessToken);
-      // Attach token to all Axios requests
-      api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
-    } else {
-      console.log('No JWT Token available.');
-      delete api.defaults.headers.common['Authorization'];
-    }
+    setAuthHeader(accessToken);
   }, [accessToken]);
-
-  React.useEffect(() => {
-    if (isAuthenticated) {
-      console.log('User is authenticated.');
-    } else {
-      console.log('User is not authenticated.');
-    }
-  }, [isAuthenticated]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,11 +83,13 @@ export default function Login() {
           console.error('Sign-in error:', response.error);
           toast.error(response.error?.message || 'Sign-in failed. Please try again.');
         } else if (needsEmailVerification) {
-          // Check if email verification is needed
           toast.error('Please verify your email before logging in. Check your inbox for the verification link.');
         } else {
           toast.success('Sign-in successful!');
-          // Access token is automatically set in headers via the useEffect above
+          // Set the token in headers immediately after successful login
+          if (response.accessToken) {
+            setAuthHeader(response.accessToken);
+          }
         }
       }
     } catch (error) {
@@ -102,10 +100,10 @@ export default function Login() {
     }
   };
 
-  // Add logout handler
   const handleLogout = async () => {
     try {
-      await signOut(); // Clear the session
+      await signOut();
+      setAuthHeader(null); // Clear the token from headers immediately
       toast.success('Logged out successfully!');
     } catch (error) {
       console.error('Logout error:', error);
@@ -199,7 +197,7 @@ export default function Login() {
                   onClick={() => setIsSignUp(!isSignUp)}
                   className="text-sm text-blue-600 hover:text-blue-700 focus:outline-none"
                 >
-                  {isSignUp ? 'Already have an account? Sign in' : 'Don’t have an account? Sign up'}
+                  {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
                 </button>
               </div>
             </form>

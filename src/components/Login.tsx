@@ -1,6 +1,5 @@
 import React from 'react';
 import axios from 'axios';
-import { setAuthToken } from '../api';
 import {
   useSignInEmailPassword,
   useSignUpEmailPassword,
@@ -32,7 +31,6 @@ export default function Login() {
   } = useSignUpEmailPassword();
 
   const { signOut } = useSignOut();
-  const accessToken = useAccessToken();
   const { isAuthenticated } = useAuthenticationStatus();
 
   const [email, setEmail] = React.useState('');
@@ -41,21 +39,6 @@ export default function Login() {
   const [isSignUp, setIsSignUp] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
-  // Function to set the access token in headers
-  const setAuthHeader = (token: string | null) => {
-    if (token) {
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      console.log('JWT Token set in headers:', token);
-    } else {
-      delete api.defaults.headers.common['Authorization'];
-      console.log('JWT Token removed from headers');
-    }
-  };
-
-  // Effect to set the access token in headers when it changes
-  React.useEffect(() => {
-    setAuthHeader(accessToken);
-  }, [accessToken]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,12 +67,6 @@ export default function Login() {
           toast.error(response.error?.message || 'Sign-in failed. Please try again.');
         } else if (needsEmailVerification) {
           toast.error('Please verify your email before logging in. Check your inbox for the verification link.');
-        } else {
-          toast.success('Sign-in successful!');
-          // Set the token in headers immediately after successful login
-          if (response.accessToken) {
-            setAuthHeader(response.accessToken);
-          }
         }
       }
     } catch (error) {
@@ -103,7 +80,6 @@ export default function Login() {
   const handleLogout = async () => {
     try {
       await signOut();
-      setAuthHeader(null); // Clear the token from headers immediately
       toast.success('Logged out successfully!');
     } catch (error) {
       console.error('Logout error:', error);

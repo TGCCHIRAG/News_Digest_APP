@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { NhostClient } from '@nhost/react';
+import { NhostClient, useAccessToken } from '@nhost/react';
 import { GraphQLClient, gql } from 'graphql-request';
 import { format } from 'date-fns';
 import { Bookmark, Share2, Heart, Loader2, Search, Check } from 'lucide-react';
@@ -12,14 +12,14 @@ const nhost = new NhostClient({
   region: import.meta.env.VITE_NHOST_REGION,
 });
 
-// Create GraphQL Client
+// Initialize GraphQL Client once with admin secret
 const graphqlClient = new GraphQLClient(nhost.graphql.getUrl(), {
   headers: {
     'x-hasura-admin-secret': import.meta.env.VITE_HASURA_ADMIN_SECRET || '',
   },
 });
 
-// Update GraphQL query
+// GraphQL query
 const GET_ARTICLES = gql`
   query GetArticles {
     articles {
@@ -36,14 +36,13 @@ const GET_ARTICLES = gql`
   }
 `;
 
-// Update the Article interface
 interface Article {
   id: string;
   title: string;
   summary: string;
   sentiment: 'positive' | 'neutral' | 'negative';
   sentiment_explanation: string;
-  type: string;  
+  type: string;
   url: string;
   image_url: string;
   created_at: string;
@@ -60,18 +59,27 @@ const fadeVariant = {
 };
 
 export default function Dashboard() {
+  const accessToken = useAccessToken();
   const [articles, setArticles] = useState<Article[]>([]);
   const [savedArticles, setSavedArticles] = useState<string[]>([]);
   const [likedArticles, setLikedArticles] = useState<string[]>([]);
   const [readArticles, setReadArticles] = useState<string[]>([]);
   const [filter, setFilter] = useState<'all' | 'positive' | 'neutral' | 'negative' | 'saved' | 'read'>('all');
-  const [preference, setPreference] = useState<string>('all'); // Preference filter for type
+  const [preference, setPreference] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [visibleArticles, setVisibleArticles] = useState(6); // For pagination
+  const [visibleArticles, setVisibleArticles] = useState(6);
 
-  // Function to determine sentiment badge color
+  // Update only the Authorization header when token changes
+  useEffect(() => {
+    if (accessToken) {
+      graphqlClient.setHeader('Authorization', `Bearer ${accessToken}`);
+    } else {
+      graphqlClient.setHeader('Authorization', '');
+    }
+  }, [accessToken]);
+
   const getSentimentColor = (sentiment: string) => {
     switch (sentiment) {
       case 'positive':
@@ -83,18 +91,16 @@ export default function Dashboard() {
     }
   };
 
-  // Handle saving/unsaving an article
   const handleSaveArticle = (articleId: string) => {
     if (savedArticles.includes(articleId)) {
-      setSavedArticles((prev) => prev.filter((id) => id !== articleId)); // Remove article ID
+      setSavedArticles((prev) => prev.filter((id) => id !== articleId));
       toast.success('Article removed from saved');
     } else {
-      setSavedArticles((prev) => [...prev, articleId]); // Add article ID
+      setSavedArticles((prev) => [...prev, articleId]);
       toast.success('Article saved');
     }
   };
 
-  // Handle liking/unliking an article
   const handleLikeArticle = (articleId: string) => {
     if (likedArticles.includes(articleId)) {
       setLikedArticles((prev) => prev.filter((id) => id !== articleId));
@@ -105,7 +111,6 @@ export default function Dashboard() {
     }
   };
 
-  // Handle marking an article as read/unread
   const handleMarkAsRead = (articleId: string) => {
     if (readArticles.includes(articleId)) {
       setReadArticles((prev) => prev.filter((id) => id !== articleId));
@@ -116,28 +121,33 @@ export default function Dashboard() {
     }
   };
 
-  // Handle sharing an article
   const handleShareArticle = (url: string) => {
     navigator.clipboard.writeText(url);
     toast.success('Link copied to clipboard!');
   };
 
-  // Fetch articles from Nhost
+  const removeDuplicateArticles = (articles: Article[]): Article[] => {
+    const uniqueTitles = new Set<string>();
+    return articles.filter((article) => {
+      if (uniqueTitles.has(article.title)) {
+        return false;
+      }
+      uniqueTitles.add(article.title);
+      return true;
+    });
+  };
+
+  // Fetch articles - runs only once on mount
   useEffect(() => {
     const fetchArticles = async () => {
       try {
         setLoading(true);
         setError(null);
         const data = await graphqlClient.request<{ articles: Article[] }>(GET_ARTICLES);
-  
-        // Remove duplicate articles based on title
         const uniqueArticles = removeDuplicateArticles(data.articles);
-  
-        // Sort articles by created_at date (newest first)
         const sortedArticles = uniqueArticles.sort((a, b) => {
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         });
-  
         setArticles(sortedArticles);
       } catch (err) {
         console.error('Error fetching articles:', err);
@@ -146,26 +156,12 @@ export default function Dashboard() {
         setLoading(false);
       }
     };
-  
+
     fetchArticles();
-  }, []);
+  }, []); // Empty dependency array means this runs once on mount
 
-  // Function to remove duplicate articles based on title
-  const removeDuplicateArticles = (articles: Article[]): Article[] => {
-    const uniqueTitles = new Set<string>();
-    return articles.filter((article) => {
-      if (uniqueTitles.has(article.title)) {
-        return false; // Skip duplicate
-      }
-      uniqueTitles.add(article.title);
-      return true; // Keep unique article
-    });
-  };
-
-  // Extract unique news types for the preference filter
   const uniqueTypes = Array.from(new Set(articles.map((article) => article.type)));
 
-  // Filter articles based on sentiment, type (preference), saved status, or search query
   const filteredArticles = articles
     .filter((article) => {
       if (filter === 'saved') return savedArticles.includes(article.id);
@@ -175,17 +171,14 @@ export default function Dashboard() {
     .filter((article) => (preference === 'all' ? true : article.type === preference))
     .filter((article) => article.title.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  // Handle loading more articles
   const handleLoadMore = () => {
-    setVisibleArticles((prev) => prev + 6); // Increase the number of visible articles by 6
+    setVisibleArticles((prev) => prev + 6);
   };
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
       <Toaster position="top-right" />
       <div className="container mx-auto p-6">
-        
-        {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold">Your News Digest</h1>
           <div className="relative">
@@ -200,9 +193,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Filters */}
         <div className="mt-4 flex gap-2 flex-wrap">
-          {/* Sentiment Filter */}
           {(['all', 'positive', 'neutral', 'negative', 'saved', 'read'] as const).map((option) => (
             <button
               key={option}
@@ -215,7 +206,6 @@ export default function Dashboard() {
             </button>
           ))}
 
-          {/* Preference (Type) Filter Dropdown */}
           <select
             value={preference}
             onChange={(e) => setPreference(e.target.value)}
@@ -230,7 +220,6 @@ export default function Dashboard() {
           </select>
         </div>
 
-        {/* Articles Grid */}
         {loading && (
           <div className="flex justify-center mt-8">
             <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
@@ -253,17 +242,12 @@ export default function Dashboard() {
               )}
               <div className="p-6">
                 <div className="flex items-center gap-2 mb-4">
-                  {/* Sentiment Badge */}
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${getSentimentColor(article.sentiment)}`}>
                     {article.sentiment.charAt(0).toUpperCase() + article.sentiment.slice(1)}
                   </span>
-
-                  {/* Type Badge */}
                   <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                     {article.type}
                   </span>
-
-                  {/* Date */}
                   <span className="text-sm text-gray-500">
                     {format(new Date(article.created_at), 'MMM d, yyyy')}
                   </span>
@@ -274,68 +258,63 @@ export default function Dashboard() {
                 <p className="text-sm text-gray-500 mb-4">{article.sentiment_explanation}</p>
 
                 <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-  <div className="flex gap-4">
-    {/* Save Article Button */}
-        <motion.button
-      onClick={() => handleSaveArticle(article.id)}
-      whileHover={bounceVariant.animate}
-      whileTap={{ scale: 0.9 }}
-      className={`text-gray-500 hover:text-blue-600 transition-colors ${
-        savedArticles.includes(article.id) ? '!text-blue-600' : ''
-      }`}
-    >
-      <Bookmark className="w-5 h-5" />
-    </motion.button>
+                  <div className="flex gap-4">
+                    <motion.button
+                      onClick={() => handleSaveArticle(article.id)}
+                      whileHover={bounceVariant.animate}
+                      whileTap={{ scale: 0.9 }}
+                      className={`text-gray-500 hover:text-blue-600 transition-colors ${
+                        savedArticles.includes(article.id) ? '!text-blue-600' : ''
+                      }`}
+                    >
+                      <Bookmark className="w-5 h-5" />
+                    </motion.button>
 
-    {/* Like Article Button */}
-    <motion.button
-      onClick={() => handleLikeArticle(article.id)}
-      whileHover={bounceVariant.animate}
-      whileTap={{ scale: 0.9 }}
-      className={`text-gray-500 hover:text-red-600 ${
-        likedArticles.includes(article.id) ? 'text-red-600' : ''
-      }`}
-    >
-      <Heart className="w-5 h-5" />
-    </motion.button>
+                    <motion.button
+                      onClick={() => handleLikeArticle(article.id)}
+                      whileHover={bounceVariant.animate}
+                      whileTap={{ scale: 0.9 }}
+                      className={`text-gray-500 hover:text-red-600 ${
+                        likedArticles.includes(article.id) ? 'text-red-600' : ''
+                      }`}
+                    >
+                      <Heart className="w-5 h-5" />
+                    </motion.button>
 
-    {/* Share Article Button */}
-    <motion.button
-      onClick={() => handleShareArticle(article.url)}
-      whileHover={bounceVariant.animate}
-      whileTap={{ scale: 0.9 }}
-      className="text-gray-500 hover:text-blue-600"
-    >
-      <Share2 className="w-5 h-5" />
-    </motion.button>
+                    <motion.button
+                      onClick={() => handleShareArticle(article.url)}
+                      whileHover={bounceVariant.animate}
+                      whileTap={{ scale: 0.9 }}
+                      className="text-gray-500 hover:text-blue-600"
+                    >
+                      <Share2 className="w-5 h-5" />
+                    </motion.button>
 
-    {/* Mark as Read Button */}
-    <motion.button
-      onClick={() => handleMarkAsRead(article.id)}
-      whileHover={bounceVariant.animate}
-      whileTap={{ scale: 0.9 }}
-      className={`text-gray-500 hover:text-green-600 ${
-        readArticles.includes(article.id) ? 'text-green-600' : ''
-      }`}
-    >
-      <Check className="w-5 h-5" />
-    </motion.button>
-  </div>
-  <a
-    href={article.url}
-    target="_blank"
-    rel="noopener noreferrer"
-    className="text-blue-600 hover:text-blue-700 font-medium"
-  >
-    Read More →
-  </a>
-</div>
+                    <motion.button
+                      onClick={() => handleMarkAsRead(article.id)}
+                      whileHover={bounceVariant.animate}
+                      whileTap={{ scale: 0.9 }}
+                      className={`text-gray-500 hover:text-green-600 ${
+                        readArticles.includes(article.id) ? 'text-green-600' : ''
+                      }`}
+                    >
+                      <Check className="w-5 h-5" />
+                    </motion.button>
+                  </div>
+                  <a
+                    href={article.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    Read More →
+                  </a>
+                </div>
               </div>
             </motion.article>
           ))}
         </div>
 
-        {/* Load More Button */}
         {filteredArticles.length > visibleArticles && (
           <div className="flex justify-center mt-8">
             <motion.button
